@@ -9,7 +9,9 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "ethers": "^6.11.1",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "sequelize": "^6.37.8",
+    "sqlite3": "^6.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
