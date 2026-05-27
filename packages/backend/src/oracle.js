@@ -16,4 +16,4 @@ async function verifyStreamsAndExecute() {
     // Next: execute write-transaction to update the contract state safely
 }
 
-verifyStreamsAndExecute();
+verifyStreamsAndExecut
