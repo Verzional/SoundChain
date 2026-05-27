@@ -1,0 +1,14 @@
+{
+  "name": "@project/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "hardhat node",
+    "build": "hardhat compile",
+    "test": "hardhat test"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.2",
+    "hardhat": "^2.22.0"
+  }
+}

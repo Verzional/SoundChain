@@ -1,0 +1,21 @@
+# Dependency directories
+node_modules/
+
+# Monorepo / Build Tool Caching
+.turbo/
+
+# Frontend Build Outputs (Vite/React)
+packages/frontend/dist/
+
+# Smart Contract Build Artifacts & Caches (Hardhat)
+packages/contracts/artifacts/
+packages/contracts/cache/
+
+# Environment Variables 
+.env
+.env.local
+.env.*.local
+
+# Operating System Files
+.DS_Store
+Thumbs.db
