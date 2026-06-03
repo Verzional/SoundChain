@@ -12,7 +12,7 @@ export default function Hero() {
         >
           <h1 className="text-7xl font-black leading-tight">
             Music Royalty
-            <span className="block gradient bg-clip-text text-transparent">
+            <span className="block ">
               On Blockchain
             </span>
           </h1>
