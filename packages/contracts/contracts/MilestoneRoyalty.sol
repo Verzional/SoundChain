@@ -13,16 +13,16 @@ contract MilestoneRoyalty {
     address public streamOracle;
     IERC20 public usdcToken;
 
-    // ========== Sistem Role & Subscription ==========
+    // ========== System Role & Subscription ==========
     enum Role { NONE, LISTENER, ARTIST }
     mapping(address => Role) public userRoles;
     mapping(address => bool) public isSubscribed;
     
-    uint256 public subscriptionFee = 5 * 10**6; // Biaya langganan platform: 5 USDC
+    uint256 public subscriptionFee = 5 * 10**6; //Platform Subscription cost: 5 USDC
     uint256 public payoutPerMilestone = 10 * 10**6;
 
     struct Song {
-        address creator; // Menyimpan alamat dompet pengunggah untuk fitur Edit
+        address creator; // save wallet address of the Artist who registered the song, only this address can edit the song details
         string ipfsHash;
         uint256 totalStreams;
         uint256 nextMilestone;
@@ -44,22 +44,22 @@ contract MilestoneRoyalty {
 
     // ========== Modifiers ==========
     modifier onlyOwner() {
-        require(msg.sender == owner, "Hanya owner yang diizinkan");
+        require(msg.sender == owner, "Only owner can perform this action");
         _;
     }
 
     modifier onlyOracle() {
-        require(msg.sender == streamOracle, "Hanya oracle yang diizinkan");
+        require(msg.sender == streamOracle, "Only oracle can perform this action");
         _;
     }
 
     modifier onlyArtist() {
-        require(userRoles[msg.sender] == Role.ARTIST, "Hanya Artist yang diizinkan");
+        require(userRoles[msg.sender] == Role.ARTIST, "Only Artist can perform this action");
         _;
     }
 
     modifier onlySongCreator(string memory songId) {
-        require(songs[songId].creator == msg.sender, "Hanya pembuat lagu yang diizinkan");
+        require(songs[songId].creator == msg.sender, "Only the song creator can perform this action");
         _;
     }
 
@@ -75,7 +75,7 @@ contract MilestoneRoyalty {
     // Mendaftarkan dompet sebagai Artist atau Listener
     function registerAccount(Role _role) public {
         require(userRoles[msg.sender] == Role.NONE, "Akun sudah terdaftar");
-        require(_role == Role.LISTENER || _role == Role.ARTIST, "Role tidak valid");
+        require(_role == Role.LISTENER || _role == Role.ARTIST, "Invalid role");
         
         userRoles[msg.sender] = _role;
         emit UserRegistered(msg.sender, _role);
@@ -83,11 +83,11 @@ contract MilestoneRoyalty {
 
     // Listener membayar biaya langganan ke platform (owner)
     function subscribePlatform() public {
-        require(userRoles[msg.sender] == Role.LISTENER, "Hanya Listener yang bisa subscribe");
-        require(!isSubscribed[msg.sender], "Sudah berlangganan");
+        require(userRoles[msg.sender] == Role.LISTENER, "Only Listener can subscribe");
+        require(!isSubscribed[msg.sender], "Already subscribed");
 
         // Memindahkan USDC dari dompet Listener ke dompet Owner Platform
-        require(usdcToken.transferFrom(msg.sender, owner, subscriptionFee), "Pembayaran subscription gagal");
+        require(usdcToken.transferFrom(msg.sender, owner, subscriptionFee), "Subscription payment failed");
         
         isSubscribed[msg.sender] = true;
         emit Subscribed(msg.sender, subscriptionFee);
@@ -106,14 +106,14 @@ contract MilestoneRoyalty {
         address[] memory collaborators,
         uint256[] memory shares
     ) public onlyArtist {
-        require(!songs[songId].isRegistered, "Lagu sudah terdaftar");
-        require(collaborators.length == shares.length, "Data pembagian tidak valid");
+        require(!songs[songId].isRegistered, "Song already registered");
+        require(collaborators.length == shares.length, "Invalid collaborators and shares data");
 
         uint256 totalShare = 0;
         for(uint i = 0; i < shares.length; i++) {
             totalShare += shares[i];
         }
-        require(totalShare == 100, "Total persentase harus 100");
+        require(totalShare == 100, "Total percentage must be 100");
 
         songs[songId] = Song({
             creator: msg.sender, // Menandai Artist ini sebagai entitas yang berhak mengedit
@@ -135,14 +135,14 @@ contract MilestoneRoyalty {
         address[] memory newCollaborators,
         uint256[] memory newShares
     ) public onlySongCreator(songId) {
-        require(songs[songId].isRegistered, "Lagu tidak ditemukan");
-        require(newCollaborators.length == newShares.length, "Data pembagian tidak valid");
+        require(songs[songId].isRegistered, "Song not found");
+        require(newCollaborators.length == newShares.length, "Invalid collaborators and shares data");
 
         uint256 totalShare = 0;
         for(uint i = 0; i < newShares.length; i++) {
             totalShare += newShares[i];
         }
-        require(totalShare == 100, "Total persentase harus 100");
+        require(totalShare == 100, "Total percentage must be 100");
 
         // Memperbarui properti lagu
         songs[songId].ipfsHash = newIpfsHash;
@@ -153,8 +153,8 @@ contract MilestoneRoyalty {
     }
 
     function updateStreamCount(string memory songId, uint256 newTotalStreams) public onlyOracle {
-        require(songs[songId].isRegistered, "Lagu tidak ditemukan");
-        require(newTotalStreams > songs[songId].totalStreams, "Jumlah stream harus bertambah");
+        require(songs[songId].isRegistered, "Song not found");
+        require(newTotalStreams > songs[songId].totalStreams, "Stream count must increase");
 
         songs[songId].totalStreams = newTotalStreams;
         emit StreamsUpdated(songId, newTotalStreams);
@@ -170,7 +170,7 @@ contract MilestoneRoyalty {
 
         for (uint i = 0; i < song.collaborators.length; i++) {
             uint256 payment = (payoutPerMilestone * song.shares[i]) / 100;
-            require(usdcToken.transfer(song.collaborators[i], payment), "Transfer gagal");
+            require(usdcToken.transfer(song.collaborators[i], payment), "Transfer failed");
             emit RoyaltyPaid(songId, song.collaborators[i], payment);
         }
 
@@ -182,7 +182,7 @@ contract MilestoneRoyalty {
     }
 
     function getSongDetails(string memory songId) public view returns (address, string memory, uint256, uint256) {
-        require(songs[songId].isRegistered, "Lagu tidak ditemukan");
+        require(songs[songId].isRegistered, "Song not found");
         return (songs[songId].creator, songs[songId].ipfsHash, songs[songId].totalStreams, songs[songId].nextMilestone);
     }
 }
