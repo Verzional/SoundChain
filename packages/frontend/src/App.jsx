@@ -1,23 +1,26 @@
-import React from "react"
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import React from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import Home from "./pages/Home"
-import Upload from "./pages/Upload"
-import Dashboard from "./pages/Dashboard"
-import Navbar from "./components/Navbar"
+import Navbar from "./components/Navbar";
+
+import Home from "./pages/Home";
+import CreatorHub from "./pages/CreatorHub";
+import Subscription from "./pages/Subscription";
+import Dashboard from "./pages/Dashboard";
 
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-[#050816] text-white overflow-x-hidden">
+      <div className="min-h-screen bg-[#050816] text-white">
         <Navbar />
 
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/upload" element={<Upload />} />
+          <Route path="/creator-hub" element={<CreatorHub />} />
+          <Route path="/subscription" element={<Subscription />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </div>
     </BrowserRouter>
-  )
+  );
 }

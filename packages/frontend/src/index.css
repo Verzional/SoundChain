@@ -12,8 +12,8 @@ body {
 .gradient {
   background: linear-gradient(
     135deg,
-    #7f5af0,
-    #2cb67d,
-    #00c6ff
+    #7c3aed 0%,
+    #a855f7 50%,
+    #ec4899 100%
   );
 }
