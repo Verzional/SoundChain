@@ -1,0 +1,6 @@
+{
+    "wake.compiler.solc.remappings": [
+        "@project/=node_modules/@project/",
+        "hardhat/=node_modules/hardhat/"
+    ]
+}
