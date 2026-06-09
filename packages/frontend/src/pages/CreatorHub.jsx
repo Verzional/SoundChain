@@ -71,19 +71,6 @@ export default function CreatorHub() {
     <div className="max-w-6xl mx-auto py-16 px-6">
       <h1 className="text-6xl font-black mb-12">Creator Hub</h1>
       <div className="grid lg:grid-cols-2 gap-8">
-
-        {/* Artist Section */}
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-8">
-          <h2 className="text-3xl font-bold mb-6 text-[#ffcc00]">Artist Registration</h2>
-          <div className="space-y-4">
-            <input placeholder="Artist Name" value={artistName} onChange={(e) => setArtistName(e.target.value)} className="w-full p-4 rounded-xl bg-black/40 border border-white/10 text-white" />
-            <p className="text-sm text-white/50 px-2">Wallet: {account || "Not connected"}</p>
-            <button onClick={handleRegisterArtist} disabled={isLoading} className="w-full p-4 rounded-xl gradient text-black font-bold disabled:opacity-50">
-              {isLoading ? "Processing..." : "Register as Artist"}
-            </button>
-          </div>
-        </div>
-
         {/* Song Section */}
         <div className="bg-white/5 border border-white/10 rounded-3xl p-8">
           <h2 className="text-3xl font-bold mb-6 text-[#ffcc00]">Upload Track</h2>
