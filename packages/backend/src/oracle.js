@@ -253,6 +253,73 @@ app.post('/api/play-bulk/:id', async (req, res) => {
   }
 });
 
+// HELPER TO MINT FREE MOCK USDC TO A SPECIFIC USER WALLET
+app.post('/api/mint-to-wallet', async (req, res) => {
+  try {
+    const { userAddress, amount } = req.body;
+    if (!userAddress) return res.status(400).json({ error: "Missing userAddress" });
+
+    const royaltyContract = new ethers.Contract(CONTRACT_ADDRESS, ContractArtifact.abi, wallet);
+    const tokenAddress = await royaltyContract.usdcToken();
+
+    const mockErc20Abi = [
+      "function mint(address to, uint256 amount) public",
+      "function balanceOf(address account) public view returns (uint256)"
+    ];
+    const tokenContract = new ethers.Contract(tokenAddress, mockErc20Abi, wallet);
+
+    // Default to 1000 USDC if no amount is specified
+    const mintAmount = ethers.parseUnits((amount || "1000").toString(), 6);
+    
+    console.log(`🪙 Minting ${amount || "1000"} USDC to user wallet: ${userAddress}...`);
+    const tx = await tokenContract.mint(userAddress, mintAmount);
+    await tx.wait();
+
+    const newBalance = await tokenContract.balanceOf(userAddress);
+    res.json({ 
+      success: true, 
+      message: "User wallet successfully funded!", 
+      walletBalance: ethers.formatUnits(newBalance, 6),
+      tokenAddress: tokenAddress // We send this back so you know what to import in MetaMask!
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/balances/:address', async (req, res) => {
+  try {
+    const userAddress = req.params.address;
+    
+    // 1. Get the USDC Token Address from the Royalty Contract
+    // We can use the provider directly for read-only calls
+    const royaltyContract = new ethers.Contract(CONTRACT_ADDRESS, ContractArtifact.abi, provider);
+    const tokenAddress = await royaltyContract.usdcToken();
+
+    // 2. Connect to the Mock USDC Contract
+    const mockErc20Abi = [
+      "function balanceOf(address account) public view returns (uint256)"
+    ];
+    const tokenContract = new ethers.Contract(tokenAddress, mockErc20Abi, provider);
+
+    // 3. Fetch both balances simultaneously
+    const treasuryBalanceRaw = await tokenContract.balanceOf(CONTRACT_ADDRESS);
+    const userBalanceRaw = await tokenContract.balanceOf(userAddress);
+
+    res.json({
+      success: true,
+      data: {
+        treasuryBalanceUSDC: ethers.formatUnits(treasuryBalanceRaw, 6),
+        userBalanceUSDC: ethers.formatUnits(userBalanceRaw, 6),
+        contractAddress: CONTRACT_ADDRESS,
+        userAddress: userAddress
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start the Backend Node
 async function startServer() {
   await initDB();
@@ -261,3 +328,4 @@ async function startServer() {
   });
 }
 startServer();
+

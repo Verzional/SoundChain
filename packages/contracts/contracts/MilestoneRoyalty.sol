@@ -117,24 +117,22 @@ contract MilestoneRoyalty {
 
     // Listener membayar biaya langganan ke platform (owner)
     function subscribePlatform() public {
+        // Allow both Listeners and Artists to subscribe (Option 2 from earlier)
         require(
-            userRoles[msg.sender] == Role.LISTENER,
-            "Only Listener can subscribe"
+            userRoles[msg.sender] == Role.LISTENER ||
+                userRoles[msg.sender] == Role.ARTIST,
+            "Must be a registered user"
         );
         require(!isSubscribed[msg.sender], "Already subscribed");
 
-        // Memindahkan USDC dari dompet Listener ke dompet Owner Platform
+        // FIXED: Money now goes to address(this) which is the Contract Treasury!
         require(
-            usdcToken.transferFrom(msg.sender, owner, subscriptionFee),
+            usdcToken.transferFrom(msg.sender, address(this), subscriptionFee),
             "Subscription payment failed"
         );
 
         isSubscribed[msg.sender] = true;
         emit Subscribed(msg.sender, subscriptionFee);
-    }
-
-    function setSubscriptionFee(uint256 _newFee) public onlyOwner {
-        subscriptionFee = _newFee;
     }
 
     // ========== Fungsi Interaksi Lagu ==========
