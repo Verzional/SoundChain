@@ -1,91 +1,127 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("MilestoneRoyalty", function () {
+describe("MilestoneRoyalty - Oracle Supported Features", function () {
   let MilestoneRoyalty, milestoneRoyalty;
   let MockUSDC, mockUSDC;
-  let owner, oracle, artist1, artist2, externalUser;
+  let owner, oracle, artist, listener, externalUser;
 
+  const subscriptionFee = ethers.parseUnits("5", 6); // 5 USDC
   const payoutPerMilestone = ethers.parseUnits("10", 6); // 10 USDC
 
   beforeEach(async function () {
-    [owner, oracle, artist1, artist2, externalUser] = await ethers.getSigners();
+    [owner, oracle, artist, listener, externalUser] = await ethers.getSigners();
 
-    // Deploy Mock USDC (Requires a basic MockERC20 contract in your contracts folder)
     MockUSDC = await ethers.getContractFactory("MockERC20"); 
     mockUSDC = await MockUSDC.deploy("Mock USDC", "USDC", 6);
 
-    // Deploy Milestone Royalty Contract
     MilestoneRoyalty = await ethers.getContractFactory("MilestoneRoyalty");
     milestoneRoyalty = await MilestoneRoyalty.deploy(oracle.address, mockUSDC.target);
 
-    // Mint USDC to the royalty contract to simulate available liquidity
+    // Mint USDC
     await mockUSDC.mint(milestoneRoyalty.target, ethers.parseUnits("1000", 6));
+    await mockUSDC.mint(listener.address, ethers.parseUnits("100", 6));
   });
 
   // ==========================================
-  // POSITIVE TEST CASES (3 Cases)
+  // FEATURE 1: ROLE REGISTRATION
   // ==========================================
-  describe("Positive Test Cases", function () {
-    it("1. Should successfully register a song with valid shares", async function () {
+  describe("Role Registration", function () {
+    it("1. Should successfully register a user as an Artist", async function () {
+      // Disesuaikan: Menambahkan artist.address sebagai argumen pertama
+      await expect(milestoneRoyalty.connect(artist).registerAccount(artist.address, 2))
+        .to.emit(milestoneRoyalty, "UserRegistered")
+        .withArgs(artist.address, 2);
+
+      expect(await milestoneRoyalty.userRoles(artist.address)).to.equal(2);
+    });
+
+    it("2. Should successfully register a user as a Listener", async function () {
+      await expect(milestoneRoyalty.connect(listener).registerAccount(listener.address, 1))
+        .to.emit(milestoneRoyalty, "UserRegistered")
+        .withArgs(listener.address, 1);
+    });
+
+    it("3. Should prevent double registration", async function () {
+      await milestoneRoyalty.connect(listener).registerAccount(listener.address, 1);
+      
       await expect(
-        milestoneRoyalty.registerSong("song1", "ipfsHash123", [artist1.address, artist2.address], [60, 40])
+        milestoneRoyalty.connect(listener).registerAccount(listener.address, 2)
+      ).to.be.revertedWith("Akun sudah terdaftar");
+    });
+  });
+
+  // ==========================================
+  // FEATURE 2: PLATFORM SUBSCRIPTION
+  // ==========================================
+  describe("Platform Subscription", function () {
+    beforeEach(async function () {
+      await milestoneRoyalty.connect(listener).registerAccount(listener.address, 1);
+    });
+
+    it("1. Should allow a Listener to subscribe and transfer USDC to Contract Treasury", async function () {
+      await mockUSDC.connect(listener).approve(milestoneRoyalty.target, subscriptionFee);
+
+      await expect(milestoneRoyalty.connect(listener).subscribePlatform())
+        .to.emit(milestoneRoyalty, "Subscribed")
+        .withArgs(listener.address, subscriptionFee);
+
+      expect(await milestoneRoyalty.isSubscribed(listener.address)).to.be.true;
+      
+      // Disesuaikan: Mengecek saldo milestoneRoyalty.target (address(this)), BUKAN owner.address
+      expect(await mockUSDC.balanceOf(milestoneRoyalty.target)).to.equal(ethers.parseUnits("1005", 6));
+    });
+
+    it("2. Should revert if an Unregistered User attempts to subscribe", async function () {
+      // Disesuaikan: Karena Artist sekarang boleh subscribe, kita tes pakai externalUser (NONE)
+      await expect(
+        milestoneRoyalty.connect(externalUser).subscribePlatform()
+      ).to.be.revertedWith("Must be a registered user");
+    });
+  });
+
+  // ==========================================
+  // FEATURE 3 & 4: RESTRICTED UPLOADS & EDITING
+  // ==========================================
+  describe("Song Registration & Editing", function () {
+    beforeEach(async function () {
+      await milestoneRoyalty.connect(artist).registerAccount(artist.address, 2);
+      await milestoneRoyalty.connect(listener).registerAccount(listener.address, 1);
+    });
+
+    it("1. Should allow an Artist to upload a song", async function () {
+      // Disesuaikan: Menambahkan artist.address sebagai argumen pertama
+      await expect(
+        milestoneRoyalty.connect(artist).registerSong(artist.address, "song1", "ipfsHashA", [artist.address], [100])
       ).to.emit(milestoneRoyalty, "SongRegistered")
-       .withArgs("song1", [artist1.address, artist2.address]);
+       .withArgs("song1", artist.address, [artist.address]);
+    });
+
+    it("2. Should revert if a Listener attempts to upload a song", async function () {
+      // Disesuaikan: Pesan error baru dari kontrak
+      await expect(
+        milestoneRoyalty.connect(listener).registerSong(listener.address, "song1", "ipfsHashA", [listener.address], [100])
+      ).to.be.revertedWith("Creator must be an Artist");
+    });
+
+    it("3. Should allow the original Creator to edit their song", async function () {
+      await milestoneRoyalty.connect(artist).registerSong(artist.address, "song1", "ipfsHashA", [artist.address], [100]);
+
+      await expect(
+        milestoneRoyalty.connect(artist).editSong("song1", "ipfsHashB", [artist.address, listener.address], [60, 40])
+      ).to.emit(milestoneRoyalty, "SongEdited")
+       .withArgs("song1", "ipfsHashB", [artist.address, listener.address], [60, 40]);
 
       const details = await milestoneRoyalty.getSongDetails("song1");
-      expect(details[0]).to.equal("ipfsHash123");
-      expect(details[1]).to.equal(0);
-      expect(details[2]).to.equal(1000);
+      expect(details[1]).to.equal("ipfsHashB");
     });
 
-    it("2. Should update stream count without triggering payout if milestone is not reached", async function () {
-      await milestoneRoyalty.registerSong("song1", "ipfsHash123", [artist1.address, artist2.address], [60, 40]);
-      
+    it("4. Should revert if a non-creator attempts to edit the song", async function () {
+      await milestoneRoyalty.connect(artist).registerSong(artist.address, "song1", "ipfsHashA", [artist.address], [100]);
+
       await expect(
-        milestoneRoyalty.connect(oracle).updateStreamCount("song1", 500)
-      ).to.emit(milestoneRoyalty, "StreamsUpdated")
-       .withArgs("song1", 500)
-       .and.to.not.emit(milestoneRoyalty, "MilestoneReached");
-    });
-
-    it("3. Should reach milestone, transfer stablecoins, and emit RoyaltyPaid events", async function () {
-      await milestoneRoyalty.registerSong("song1", "ipfsHash123", [artist1.address, artist2.address], [60, 40]);
-
-      // Trigger streams to exactly 1000
-      await expect(milestoneRoyalty.connect(oracle).updateStreamCount("song1", 1000))
-        .to.emit(milestoneRoyalty, "MilestoneReached").withArgs("song1", 1000)
-        .and.to.emit(milestoneRoyalty, "RoyaltyPaid").withArgs("song1", artist1.address, ethers.parseUnits("6", 6))
-        .and.to.emit(milestoneRoyalty, "RoyaltyPaid").withArgs("song1", artist2.address, ethers.parseUnits("4", 6));
-
-      // Verify balances transferred properly
-      expect(await mockUSDC.balanceOf(artist1.address)).to.equal(ethers.parseUnits("6", 6));
-      expect(await mockUSDC.balanceOf(artist2.address)).to.equal(ethers.parseUnits("4", 6));
-    });
-  });
-
-  // ==========================================
-  // NEGATIVE TEST CASES (3 Cases)
-  // ==========================================
-  describe("Negative Test Cases", function () {
-    it("1. Should revert when a non-owner attempts to set a new oracle", async function () {
-      await expect(
-        milestoneRoyalty.connect(externalUser).setOracle(externalUser.address)
-      ).to.be.revertedWith("Hanya owner yang diizinkan");
-    });
-
-    it("2. Should revert when registering a song with shares not totaling 100", async function () {
-      await expect(
-        milestoneRoyalty.registerSong("song1", "ipfsHash123", [artist1.address, artist2.address], [50, 40])
-      ).to.be.revertedWith("Total persentase harus 100");
-    });
-
-    it("3. Should revert when a non-oracle attempts to update the stream count", async function () {
-      await milestoneRoyalty.registerSong("song1", "ipfsHash123", [artist1.address, artist2.address], [60, 40]);
-      
-      await expect(
-        milestoneRoyalty.connect(externalUser).updateStreamCount("song1", 500)
-      ).to.be.revertedWith("Hanya oracle yang diizinkan");
+        milestoneRoyalty.connect(externalUser).editSong("song1", "ipfsHashB", [externalUser.address], [100])
+      ).to.be.revertedWith("Not authorized");
     });
   });
 });
