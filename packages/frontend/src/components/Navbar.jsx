@@ -1,8 +1,10 @@
-import React from "react";
+import React, {useState} from "react";
 import { NavLink } from "react-router-dom";
 import WalletButton from "./WalletButton";
 
 export default function Navbar() {
+  const [activeAccount, setActiveAccount] = useState("");
+  
   const navStyle = ({ isActive }) =>
     `relative transition duration-300 ${
       isActive
@@ -65,7 +67,7 @@ export default function Navbar() {
           )}
         </NavLink>
 
-        <WalletButton />
+        <WalletButton onAccountChange={(acc) => setActiveAccount(acc)} />
       </div>
     </nav>
   );

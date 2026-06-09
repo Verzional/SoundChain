@@ -1,26 +1,25 @@
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors"); // 1. Add this import
+const cors = require("cors"); 
 const { ethers } = require("ethers");
 const { initDB, Track } = require("./db");
 
 const app = express();
-app.use(cors()); // 2. Add this line to enable cross-origin requests!
+app.use(cors());
 app.use(express.json());
 
 const PORT = 3001;
-// ... rest of your code
 
-// 1. Web3 / Hardhat Provider Setup
+// 1. Web3 Setup
 const LOCAL_RPC_URL = "http://127.0.0.1:8545";
-const ORACLE_PRIVATE_KEY =
-  "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+const ORACLE_PRIVATE_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 
 const provider = new ethers.JsonRpcProvider(LOCAL_RPC_URL);
 const wallet = new ethers.Wallet(ORACLE_PRIVATE_KEY, provider);
 
+// Make sure your artifact path is correct here based on your hardhat compilation
 const ContractArtifact = require("../../contracts/artifacts/contracts/MilestoneRoyalty.sol/MilestoneRoyalty.json");
-const CONTRACT_ADDRESS = "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"; // Update after deployment
+const CONTRACT_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 
 // 2. Oracle stream validation logic
 async function triggerMilestoneUpdate(trackId) {
@@ -57,6 +56,23 @@ async function triggerMilestoneUpdate(trackId) {
     return { success: false, error: error.message };
   }
 }
+
+app.post("/api/users/register", async (req, res) => {
+  try {
+    const { userAddress, role } = req.body; // Role 1 = LISTENER, Role 2 = ARTIST
+    if (!userAddress || !role) return res.status(400).json({ error: "Missing parameters" });
+
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, ContractArtifact.abi, wallet);
+    
+    console.log(`👤 Oracle registering ${userAddress} with role ${role}...`);
+    const tx = await contract.registerAccount(userAddress, role);
+    await tx.wait();
+
+    res.json({ success: true, message: "Role assigned successfully!", txHash: tx.hash });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // 3. API Endpoints for Frontend Interaction
 
@@ -163,12 +179,8 @@ app.post('/api/fund-contract', async (req, res) => {
 app.post('/api/tracks/upload', async (req, res) => {
   try {
     const { title, ipfsHash, artistAddress } = req.body;
+    if (!title || !artistAddress) return res.status(400).json({ error: "Missing title or artistAddress" });
 
-    if (!title || !artistAddress) {
-      return res.status(400).json({ error: "Missing title or artistAddress" });
-    }
-
-    // 1. Save track to the SQLite off-chain database first
     const newTrack = await Track.create({
       title: title,
       artistAddress: artistAddress,
@@ -177,26 +189,46 @@ app.post('/api/tracks/upload', async (req, res) => {
       lastValidatedMilestone: 0
     });
 
-    // 2. Instantiate smart contract to bind it on the blockchain
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ContractArtifact.abi, wallet);
     
-    console.log(`⛓️ Registering newly created Track #${newTrack.id} on the blockchain...`);
+    // UPDATED to match our new Smart Contract parameters
     const tx = await contract.registerSong(
+        newTrack.artistAddress, // Passed dynamically now
         newTrack.id.toString(), 
         newTrack.ipfsHash, 
         [newTrack.artistAddress], 
-        [100] // 100% payout share to the artist
+        [100] 
     );
     await tx.wait();
 
-    res.json({ 
-      success: true, 
-      message: "Track saved to database and registered on-chain!", 
-      trackId: newTrack.id,
-      txHash: tx.hash 
-    });
+    res.json({ success: true, message: "Track registered!", trackId: newTrack.id, txHash: tx.hash });
   } catch (error) {
-    console.error("Upload workflow failed:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/tracks/edit/:id', async (req, res) => {
+  try {
+    const { ipfsHash, collaborators, shares } = req.body;
+    const track = await Track.findByPk(req.params.id);
+    if (!track) return res.status(404).json({ error: "Track not found" });
+
+    // Update DB
+    track.ipfsHash = ipfsHash || track.ipfsHash;
+    await track.save();
+
+    // Sync to Blockchain
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, ContractArtifact.abi, wallet);
+    const tx = await contract.editSong(
+        track.id.toString(),
+        track.ipfsHash,
+        collaborators || [track.artistAddress],
+        shares || [100]
+    );
+    await tx.wait();
+
+    res.json({ success: true, message: "Track updated on-chain!", txHash: tx.hash });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -225,10 +257,7 @@ app.post('/api/play-bulk/:id', async (req, res) => {
 async function startServer() {
   await initDB();
   app.listen(PORT, () => {
-    console.log(
-      `🚀 SoundChain Oracle API Server running on http://localhost:${PORT}`,
-    );
+    console.log(`🚀 SoundChain Oracle API Server running on http://localhost:${PORT}`);
   });
 }
-
 startServer();
